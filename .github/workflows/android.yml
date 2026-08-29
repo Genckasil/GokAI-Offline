@@ -23,6 +23,9 @@ jobs:
       - name: Android SDK kur
         uses: android-actions/setup-android@v3
 
+      - name: NDK kur
+        run: sdkmanager "ndk;27.2.12479018" "cmake;3.22.1"
+
       - name: Gradle kur
         uses: gradle/actions/setup-gradle@v4
         with:
