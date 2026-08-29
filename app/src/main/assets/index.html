@@ -15,34 +15,81 @@ color:white;
 font-family:Arial,sans-serif;
 height:100vh;
 display:flex;
-flex-direction:column;
+flex-direction:column
 }
 
 header{
 height:52px;
 display:flex;
 align-items:center;
+justify-content:space-between;
 padding:0 14px;
 border-bottom:1px solid #263247;
 font-size:19px;
-font-weight:bold;
+font-weight:bold
+}
+
+.status{
+font-size:12px;
+color:#9fb1ca
 }
 
 #chat{
 flex:1;
 overflow:auto;
-padding:15px;
+padding:14px
 }
 
 .welcome{
 text-align:center;
-margin-top:35%;
-color:#b8c4d8;
+margin-top:25%;
+color:#b8c4d8
+}
+
+.card{
+background:#172235;
+border:1px solid #263247;
+border-radius:18px;
+padding:16px;
+margin:12px 0
+}
+
+button{
+border:0;
+border-radius:18px;
+background:#2563eb;
+color:white;
+padding:11px 14px;
+font-size:14px
+}
+
+.secondary{
+background:#202d42
+}
+
+.progressBox{
+height:10px;
+background:#202d42;
+border-radius:20px;
+overflow:hidden;
+margin-top:12px
+}
+
+#progress{
+height:100%;
+width:0%;
+background:#2563eb
+}
+
+#progressText{
+font-size:13px;
+margin-top:8px;
+color:#9fb1ca
 }
 
 .bottom{
-padding:10px;
-border-top:1px solid #263247;
+padding:9px;
+border-top:1px solid #263247
 }
 
 .inputrow{
@@ -50,7 +97,7 @@ display:flex;
 align-items:center;
 background:#192438;
 border-radius:25px;
-padding:5px 7px 5px 14px;
+padding:5px 7px 5px 14px
 }
 
 input{
@@ -60,39 +107,266 @@ outline:0;
 background:transparent;
 color:white;
 font-size:16px;
-padding:10px 0;
+padding:11px 0
 }
 
-button{
+.send{
 width:42px;
 height:42px;
-border:0;
 border-radius:50%;
-background:white;
-color:#111827;
+padding:0;
 font-size:20px;
+background:white;
+color:#111827
 }
 
+.msg{
+padding:11px 14px;
+margin:8px 0;
+border-radius:16px;
+max-width:88%;
+line-height:1.4;
+white-space:pre-wrap
+}
+
+.me{
+background:#2b3b55;
+margin-left:auto
+}
+
+.ai{
+background:#182337
+}
 </style>
 </head>
 
 <body>
 
-<header>GökAI Offline</header>
+<header>
+<div>GökAI Offline</div>
+<div class="status" id="status">Model yok</div>
+</header>
 
 <div id="chat">
-<div class="welcome">
+
+<div class="welcome" id="welcome">
 <h2>GökAI 👋</h2>
-<p>Offline yapay zekâ hazırlanıyor.</p>
+<p>İnternetsiz çalışan yapay zekâ.</p>
 </div>
+
+<div class="card" id="modelCard">
+<h3>Offline modeli kur</h3>
+
+<p>
+Yaklaşık 4 GB büyüklüğündeki GGUF model dosyasını seç.
+Model bir kere telefona kopyalandıktan sonra internet gerekmez.
+</p>
+
+<button onclick="pickModel()">
+📦 Model seç
+</button>
+
+<button class="secondary" onclick="loadSavedModel()">
+▶ Kayıtlı modeli yükle
+</button>
+
+<div class="progressBox">
+<div id="progress"></div>
+</div>
+
+<div id="progressText">
+Model seçilmedi.
+</div>
+
+</div>
+
 </div>
 
 <div class="bottom">
+
 <div class="inputrow">
-<input placeholder="GökAI'ye bir şey sor...">
-<button>↑</button>
+
+<input
+id="input"
+placeholder="Önce modeli yükle..."
+disabled>
+
+<button
+class="send"
+id="sendBtn"
+onclick="sendMessage()"
+disabled>
+↑
+</button>
+
 </div>
+
 </div>
+
+<script>
+
+let modelReady=false;
+
+function addMessage(text,type){
+
+const div=document.createElement("div");
+
+div.className="msg "+type;
+div.innerText=text;
+
+document
+.getElementById("chat")
+.appendChild(div);
+
+div.scrollIntoView();
+}
+
+function pickModel(){
+
+if(window.GokAIAndroid){
+
+GokAIAndroid.pickModel();
+
+}else{
+
+alert("Android bağlantısı bulunamadı.");
+}
+}
+
+function loadSavedModel(){
+
+if(window.GokAIAndroid){
+
+GokAIAndroid.loadSavedModel();
+}
+}
+
+window.onModelLoading=function(text){
+
+document
+.getElementById("status")
+.innerText="Yükleniyor";
+
+document
+.getElementById("progressText")
+.innerText=text;
+}
+
+window.onModelProgress=function(percent){
+
+document
+.getElementById("progress")
+.style.width=percent+"%";
+
+document
+.getElementById("progressText")
+.innerText="Model telefona aktarılıyor: %"+percent;
+}
+
+window.onModelReady=function(text){
+
+modelReady=true;
+
+document
+.getElementById("status")
+.innerText="Hazır";
+
+document
+.getElementById("progress")
+.style.width="100%";
+
+document
+.getElementById("progressText")
+.innerText=text;
+
+document
+.getElementById("input")
+.disabled=false;
+
+document
+.getElementById("sendBtn")
+.disabled=false;
+
+document
+.getElementById("input")
+.placeholder="GökAI'ye bir şey sor...";
+
+addMessage(
+"Ben GökAI'yım. Göktuğ Ege Genç tarafından geliştirilen bir yapay zekâyım. Offline model hazır.",
+"ai"
+);
+}
+
+window.onModelError=function(text){
+
+modelReady=false;
+
+document
+.getElementById("status")
+.innerText="Hata";
+
+document
+.getElementById("progressText")
+.innerText=text;
+
+alert(text);
+}
+
+window.onModelUnloaded=function(){
+
+modelReady=false;
+
+document
+.getElementById("status")
+.innerText="Model kapalı";
+}
+
+function sendMessage(){
+
+const input=
+document.getElementById("input");
+
+const text=
+input.value.trim();
+
+if(!text)return;
+
+if(!modelReady){
+
+alert("Önce offline modeli yükle.");
+return;
+}
+
+addMessage(text,"me");
+
+input.value="";
+
+addMessage(
+"Model hazır. Cevap üretme motorunu sıradaki adımda bağlıyoruz.",
+"ai"
+);
+}
+
+document
+.getElementById("input")
+.addEventListener("keydown",function(e){
+
+if(e.key==="Enter"){
+sendMessage();
+}
+});
+
+if(
+window.GokAIAndroid &&
+GokAIAndroid.modelExists()
+){
+
+document
+.getElementById("progressText")
+.innerText="Telefonda kayıtlı model bulundu. 'Kayıtlı modeli yükle'ye bas.";
+}
+
+</script>
 
 </body>
 </html>
