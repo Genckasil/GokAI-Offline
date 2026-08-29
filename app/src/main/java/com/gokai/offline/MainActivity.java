@@ -35,6 +35,8 @@ public class MainActivity extends Activity {
 
     public native boolean nativeIsModelLoaded();
 
+    public native String nativeGenerate(String text);
+
     public native void nativeUnloadModel();
 
     @Override
@@ -51,13 +53,8 @@ public class MainActivity extends Activity {
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
 
-        webView.setWebViewClient(
-                new WebViewClient()
-        );
-
-        webView.setWebChromeClient(
-                new WebChromeClient()
-        );
+        webView.setWebViewClient(new WebViewClient());
+        webView.setWebChromeClient(new WebChromeClient());
 
         webView.addJavascriptInterface(
                 new GokAIBridge(),
@@ -96,19 +93,16 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public boolean isModelLoaded() {
-
             return nativeIsModelLoaded();
         }
 
         @JavascriptInterface
         public boolean modelExists() {
-
             return getModelFile().exists();
         }
 
         @JavascriptInterface
         public String getEngineStatus() {
-
             return nativeTest();
         }
 
@@ -162,6 +156,71 @@ public class MainActivity extends Activity {
                             "window.onModelError(" +
                                     JSONObject.quote(
                                             "Model yüklenemedi."
+                                    ) +
+                                    ");"
+                    );
+                }
+
+            }).start();
+        }
+
+        @JavascriptInterface
+        public void askOffline(String text) {
+
+            new Thread(() -> {
+
+                try {
+
+                    if (!nativeIsModelLoaded()) {
+
+                        sendJs(
+                                "window.onAIResult(" +
+                                        JSONObject.quote(
+                                                "Önce offline modeli yükle."
+                                        ) +
+                                        ");"
+                        );
+
+                        return;
+                    }
+
+                    if (text == null ||
+                            text.trim().isEmpty()) {
+
+                        return;
+                    }
+
+                    sendJs(
+                            "window.onAIThinking();"
+                    );
+
+                    String answer =
+                            nativeGenerate(
+                                    text.trim()
+                            );
+
+                    if (answer == null ||
+                            answer.trim().isEmpty()) {
+
+                        answer =
+                                "Bu soruya cevap üretemedim.";
+                    }
+
+                    sendJs(
+                            "window.onAIResult(" +
+                                    JSONObject.quote(
+                                            answer
+                                    ) +
+                                    ");"
+                    );
+
+                } catch (Exception e) {
+
+                    sendJs(
+                            "window.onAIResult(" +
+                                    JSONObject.quote(
+                                            "Model hatası: " +
+                                                    e.getMessage()
                                     ) +
                                     ");"
                     );
@@ -307,8 +366,8 @@ public class MainActivity extends Activity {
                         int percent =
                                 (int) (
                                         copied *
-                                        100 /
-                                        total
+                                                100 /
+                                                total
                                 );
 
                         if (
