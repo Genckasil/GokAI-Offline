@@ -15,7 +15,8 @@ color:white;
 font-family:Arial,sans-serif;
 height:100vh;
 display:flex;
-flex-direction:column
+flex-direction:column;
+overflow:hidden
 }
 
 header{
@@ -23,7 +24,7 @@ height:52px;
 display:flex;
 align-items:center;
 justify-content:space-between;
-padding:0 14px;
+padding:0 12px;
 border-bottom:1px solid #263247;
 font-size:19px;
 font-weight:bold
@@ -42,7 +43,7 @@ padding:14px
 
 .welcome{
 text-align:center;
-margin-top:25%;
+margin-top:22%;
 color:#b8c4d8
 }
 
@@ -155,11 +156,12 @@ background:#182337
 </div>
 
 <div class="card" id="modelCard">
+
 <h3>Offline modeli kur</h3>
 
 <p>
 Yaklaşık 4 GB büyüklüğündeki GGUF model dosyasını seç.
-Model bir kere telefona kopyalandıktan sonra internet gerekmez.
+Bir kere telefona kopyalandıktan sonra internet gerekmez.
 </p>
 
 <button onclick="pickModel()">
@@ -189,6 +191,7 @@ Model seçilmedi.
 <input
 id="input"
 placeholder="Önce modeli yükle..."
+autocomplete="off"
 disabled>
 
 <button
@@ -204,10 +207,27 @@ disabled>
 </div>
 
 <script>
-
 let modelReady=false;
+let thinking=false;
 
-function addMessage(text,type){
+let history=[];
+
+try{
+history=JSON.parse(
+localStorage.getItem("gokai_offline_history")||"[]"
+);
+}catch(e){
+history=[];
+}
+
+function saveHistory(){
+localStorage.setItem(
+"gokai_offline_history",
+JSON.stringify(history)
+);
+}
+
+function drawMessage(text,type){
 
 const div=document.createElement("div");
 
@@ -219,6 +239,30 @@ document
 .appendChild(div);
 
 div.scrollIntoView();
+}
+
+function addMessage(text,type){
+
+history.push({
+text:text,
+type:type,
+time:Date.now()
+});
+
+saveHistory();
+
+drawMessage(text,type);
+}
+
+function restoreHistory(){
+
+if(history.length===0){
+return;
+}
+
+history.forEach(m=>{
+drawMessage(m.text,m.type);
+});
 }
 
 function pickModel(){
@@ -291,10 +335,17 @@ document
 .getElementById("input")
 .placeholder="GökAI'ye bir şey sor...";
 
+document
+.getElementById("modelCard")
+.style.display="none";
+
+if(history.length===0){
+
 addMessage(
 "Ben GökAI'yım. Göktuğ Ege Genç tarafından geliştirilen bir yapay zekâyım. Offline model hazır.",
 "ai"
 );
+}
 }
 
 window.onModelError=function(text){
@@ -321,7 +372,62 @@ document
 .innerText="Model kapalı";
 }
 
+window.onAIThinking=function(){
+
+thinking=true;
+
+drawMessage(
+"Düşünüyorum...",
+"ai"
+);
+}
+
+function removeThinking(){
+
+const chat=
+document.getElementById("chat");
+
+const messages=
+chat.getElementsByClassName("ai");
+
+if(
+messages.length>0 &&
+messages[messages.length-1].innerText==="Düşünüyorum..."
+){
+
+messages[messages.length-1].remove();
+}
+}
+
+window.onAIResult=function(text){
+
+thinking=false;
+
+removeThinking();
+
+addMessage(
+text,
+"ai"
+);
+
+document
+.getElementById("sendBtn")
+.disabled=false;
+
+document
+.getElementById("input")
+.disabled=false;
+
+document
+.getElementById("input")
+.focus();
+}
+
 function sendMessage(){
+
+if(thinking){
+return;
+}
 
 const input=
 document.getElementById("input");
@@ -329,32 +435,65 @@ document.getElementById("input");
 const text=
 input.value.trim();
 
-if(!text)return;
-
-if(!modelReady){
-
-alert("Önce offline modeli yükle.");
+if(!text){
 return;
 }
 
-addMessage(text,"me");
+if(!modelReady){
+
+alert(
+"Önce offline modeli yükle."
+);
+
+return;
+}
+
+addMessage(
+text,
+"me"
+);
 
 input.value="";
 
-addMessage(
-"Model hazır. Cevap üretme motorunu sıradaki adımda bağlıyoruz.",
-"ai"
+document
+.getElementById("sendBtn")
+.disabled=true;
+
+document
+.getElementById("input")
+.disabled=true;
+
+if(window.GokAIAndroid){
+
+GokAIAndroid.askOffline(
+text
 );
+
+}else{
+
+window.onAIResult(
+"Android bağlantısı bulunamadı."
+);
+}
 }
 
 document
 .getElementById("input")
-.addEventListener("keydown",function(e){
+.addEventListener(
+"keydown",
+function(e){
 
-if(e.key==="Enter"){
+if(
+e.key==="Enter" &&
+!thinking
+){
+
 sendMessage();
 }
+
 });
+
+restoreHistory();
 
 if(
 window.GokAIAndroid &&
@@ -363,9 +502,9 @@ GokAIAndroid.modelExists()
 
 document
 .getElementById("progressText")
-.innerText="Telefonda kayıtlı model bulundu. 'Kayıtlı modeli yükle'ye bas.";
+.innerText=
+"Telefonda kayıtlı model bulundu. 'Kayıtlı modeli yükle'ye bas.";
 }
-
 </script>
 
 </body>
