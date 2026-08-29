@@ -16,7 +16,6 @@ static void free_context() {
 }
 
 static void free_all() {
-
     free_context();
 
     if (g_model != nullptr) {
@@ -26,7 +25,6 @@ static void free_all() {
 }
 
 static bool create_context() {
-
     if (g_model == nullptr) {
         return false;
     }
@@ -36,13 +34,12 @@ static bool create_context() {
     llama_context_params ctx_params =
             llama_context_default_params();
 
-    // Telefon için başlangıç ayarları
-    ctx_params.n_ctx = 4096;
-    ctx_params.n_batch = 512;
-    ctx_params.n_ubatch = 512;
+    ctx_params.n_ctx = 2048;
+    ctx_params.n_batch = 256;
+    ctx_params.n_ubatch = 256;
 
-    ctx_params.n_threads = 4;
-    ctx_params.n_threads_batch = 4;
+    ctx_params.n_threads = 6;
+    ctx_params.n_threads_batch = 6;
 
     g_context =
             llama_init_from_model(
@@ -57,10 +54,10 @@ extern "C"
 JNIEXPORT jstring JNICALL
 Java_com_gokai_offline_MainActivity_nativeTest(
         JNIEnv * env,
-        jobject /* thiz */) {
+        jobject) {
 
     return env->NewStringUTF(
-            "GokAI Offline llama.cpp motoru hazır"
+            "GokAI Offline motor hazır"
     );
 }
 
@@ -68,7 +65,7 @@ extern "C"
 JNIEXPORT jboolean JNICALL
 Java_com_gokai_offline_MainActivity_nativeLoadModel(
         JNIEnv * env,
-        jobject /* thiz */,
+        jobject,
         jstring modelPath) {
 
     if (modelPath == nullptr) {
@@ -76,9 +73,7 @@ Java_com_gokai_offline_MainActivity_nativeLoadModel(
     }
 
     if (!backend_ready) {
-
         llama_backend_init();
-
         backend_ready = true;
     }
 
@@ -97,8 +92,6 @@ Java_com_gokai_offline_MainActivity_nativeLoadModel(
     llama_model_params model_params =
             llama_model_default_params();
 
-    // İlk sürüm CPU.
-    // Daha sonra hızlandırma ekleyebiliriz.
     model_params.n_gpu_layers = 0;
 
     g_model =
@@ -117,10 +110,7 @@ Java_com_gokai_offline_MainActivity_nativeLoadModel(
     }
 
     if (!create_context()) {
-
-        llama_model_free(g_model);
-        g_model = nullptr;
-
+        free_all();
         return JNI_FALSE;
     }
 
@@ -130,8 +120,8 @@ Java_com_gokai_offline_MainActivity_nativeLoadModel(
 extern "C"
 JNIEXPORT jboolean JNICALL
 Java_com_gokai_offline_MainActivity_nativeIsModelLoaded(
-        JNIEnv * /* env */,
-        jobject /* thiz */) {
+        JNIEnv *,
+        jobject) {
 
     return
             g_model != nullptr &&
@@ -144,53 +134,43 @@ extern "C"
 JNIEXPORT jstring JNICALL
 Java_com_gokai_offline_MainActivity_nativeGenerate(
         JNIEnv * env,
-        jobject /* thiz */,
+        jobject,
         jstring userText) {
 
     if (g_model == nullptr) {
-
         return env->NewStringUTF(
                 "Önce offline modeli yükle."
         );
     }
 
     if (userText == nullptr) {
-
         return env->NewStringUTF(
-                "Bir şey sorman gerekiyor."
+                "Bir soru yaz."
         );
     }
 
-    const char * raw_user =
+    const char * raw =
             env->GetStringUTFChars(
                     userText,
                     nullptr
             );
 
-    if (raw_user == nullptr) {
-
+    if (raw == nullptr) {
         return env->NewStringUTF(
                 "Mesaj okunamadı."
         );
     }
 
-    std::string user(raw_user);
+    std::string user(raw);
 
     env->ReleaseStringUTFChars(
             userText,
-            raw_user
+            raw
     );
 
-    /*
-     * Her yeni soruda temiz context.
-     * Böylece önceki KV cache taşmıyor.
-     * Sohbet hafızasını daha sonra Java tarafında
-     * kontrollü olarak prompta ekleyeceğiz.
-     */
     if (!create_context()) {
-
         return env->NewStringUTF(
-                "Model çalışma belleği oluşturulamadı."
+                "Model belleği hazırlanamadı."
         );
     }
 
@@ -200,24 +180,22 @@ Java_com_gokai_offline_MainActivity_nativeGenerate(
             );
 
     if (vocab == nullptr) {
-
         return env->NewStringUTF(
-                "Model sözlüğü yüklenemedi."
+                "Model sözlüğü bulunamadı."
         );
     }
 
-    /*
-     * GökAI kimliği.
-     */
     std::string system_prompt =
-            "Senin adın GökAI. "
-            "Göktuğ Ege Genç tarafından geliştirilmiş bir yapay zekasın. "
-            "Kullanıcı sana 'sen kimsin', 'adın ne', "
-            "'hangi yapay zekasın' veya benzeri bir soru sorarsa "
-            "kendini GökAI olarak tanıt. "
+            "Sen GökAI'sın. "
+            "Göktuğ Ege Genç tarafından geliştirilen bir yapay zekasın. "
             "Kendini ChatGPT olarak tanıtma. "
-            "Türkçe konuş. "
-            "Doğal, yardımcı ve anlaşılır cevaplar ver.";
+            "Türkçe cevap ver. "
+            "Cevapların kısa, net ve faydalı olsun. "
+            "Gereksiz uzun düşünme yapma.";
+
+    std::string user_prompt =
+            user +
+            "\n/no_think";
 
     std::vector<llama_chat_message> messages;
 
@@ -228,7 +206,7 @@ Java_com_gokai_offline_MainActivity_nativeGenerate(
 
     messages.push_back({
             "user",
-            user.c_str()
+            user_prompt.c_str()
     });
 
     const char * chat_template =
@@ -237,7 +215,7 @@ Java_com_gokai_offline_MainActivity_nativeGenerate(
                     nullptr
             );
 
-    std::vector<char> formatted(8192);
+    std::vector<char> formatted(4096);
 
     int formatted_len =
             llama_chat_apply_template(
@@ -249,15 +227,7 @@ Java_com_gokai_offline_MainActivity_nativeGenerate(
                     formatted.size()
             );
 
-    if (formatted_len < 0) {
-
-        return env->NewStringUTF(
-                "Modelin sohbet şablonu uygulanamadı."
-        );
-    }
-
-    if (formatted_len >
-            (int) formatted.size()) {
+    if (formatted_len > (int) formatted.size()) {
 
         formatted.resize(
                 formatted_len
@@ -272,13 +242,12 @@ Java_com_gokai_offline_MainActivity_nativeGenerate(
                         formatted.data(),
                         formatted.size()
                 );
+    }
 
-        if (formatted_len < 0) {
-
-            return env->NewStringUTF(
-                    "Sohbet hazırlanamadı."
-            );
-        }
+    if (formatted_len < 0) {
+        return env->NewStringUTF(
+                "Sohbet hazırlanamadı."
+        );
     }
 
     std::string prompt(
@@ -298,9 +267,8 @@ Java_com_gokai_offline_MainActivity_nativeGenerate(
             );
 
     if (token_count <= 0) {
-
         return env->NewStringUTF(
-                "Mesaj tokenlara ayrılamadı."
+                "Mesaj işlenemedi."
         );
     }
 
@@ -320,9 +288,8 @@ Java_com_gokai_offline_MainActivity_nativeGenerate(
             );
 
     if (tokenized < 0) {
-
         return env->NewStringUTF(
-                "Mesaj işlenemedi."
+                "Mesaj tokenlara ayrılamadı."
         );
     }
 
@@ -332,22 +299,16 @@ Java_com_gokai_offline_MainActivity_nativeGenerate(
                     tokens.size()
             );
 
-    int decode_result =
-            llama_decode(
-                    g_context,
-                    batch
-            );
-
-    if (decode_result != 0) {
+    if (llama_decode(
+            g_context,
+            batch
+    ) != 0) {
 
         return env->NewStringUTF(
                 "Model soruyu işleyemedi."
         );
     }
 
-    /*
-     * Sampler
-     */
     llama_sampler * sampler =
             llama_sampler_chain_init(
                     llama_sampler_chain_default_params()
@@ -364,7 +325,7 @@ Java_com_gokai_offline_MainActivity_nativeGenerate(
     llama_sampler_chain_add(
             sampler,
             llama_sampler_init_temp(
-                    0.75f
+                    0.7f
             )
     );
 
@@ -377,13 +338,11 @@ Java_com_gokai_offline_MainActivity_nativeGenerate(
 
     std::string response;
 
-    const int MAX_NEW_TOKENS = 512;
+    const int MAX_NEW_TOKENS = 128;
 
-    for (int i = 0;
-         i < MAX_NEW_TOKENS;
-         i++) {
+    for (int i = 0; i < MAX_NEW_TOKENS; i++) {
 
-        llama_token new_token =
+        llama_token token =
                 llama_sampler_sample(
                         sampler,
                         g_context,
@@ -392,9 +351,8 @@ Java_com_gokai_offline_MainActivity_nativeGenerate(
 
         if (llama_vocab_is_eog(
                 vocab,
-                new_token
+                token
         )) {
-
             break;
         }
 
@@ -403,7 +361,7 @@ Java_com_gokai_offline_MainActivity_nativeGenerate(
         int piece_len =
                 llama_token_to_piece(
                         vocab,
-                        new_token,
+                        token,
                         buffer,
                         sizeof(buffer),
                         0,
@@ -411,26 +369,22 @@ Java_com_gokai_offline_MainActivity_nativeGenerate(
                 );
 
         if (piece_len > 0) {
-
             response.append(
                     buffer,
                     piece_len
             );
         }
 
-        llama_batch next_batch =
+        llama_batch next =
                 llama_batch_get_one(
-                        &new_token,
+                        &token,
                         1
                 );
 
-        int result =
-                llama_decode(
-                        g_context,
-                        next_batch
-                );
-
-        if (result != 0) {
+        if (llama_decode(
+                g_context,
+                next
+        ) != 0) {
             break;
         }
     }
@@ -440,7 +394,6 @@ Java_com_gokai_offline_MainActivity_nativeGenerate(
     );
 
     if (response.empty()) {
-
         response =
                 "Bu soruya cevap üretemedim.";
     }
@@ -453,8 +406,8 @@ Java_com_gokai_offline_MainActivity_nativeGenerate(
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_gokai_offline_MainActivity_nativeUnloadModel(
-        JNIEnv * /* env */,
-        jobject /* thiz */) {
+        JNIEnv *,
+        jobject) {
 
     free_all();
 }
